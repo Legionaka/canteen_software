@@ -1,1 +1,1 @@
-# Login, register, logout
+# Login, register, logout, and password reset routes for the application.
