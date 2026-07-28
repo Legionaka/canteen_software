@@ -1,6 +1,3 @@
-bash
-
-cat > /home/claude/campuseats/CAMPUSEATS_SPEC.md << 'ENDOFFILE'
 # CampusEats — Full Project Specification
 > College canteen ordering system · Flask + SQLite + HTML/CSS/JS
 
@@ -8,10 +5,13 @@ cat > /home/claude/campuseats/CAMPUSEATS_SPEC.md << 'ENDOFFILE'
 
 ## 👥 Team
 
-| Developer | Role | Responsibility |
-|-----------|------|----------------|
-| **Legion** | Backend | Flask app, database models, API routes, business logic |
-| **Tino** | Frontend | HTML templates, CSS styling, JavaScript interactivity |
+| Developer | Role | Owns |
+|-----------|------|------|
+| **Ammara** | Database | `models.py`, `seed.py`, DB schema, migrations |
+| **Legion** | Backend | `app.py`, `routes/auth.py`, `routes/student.py`, `routes/staff.py`, `routes/admin.py` |
+| **Tino** | Frontend | All `templates/`, `static/css/`, `static/js/` |
+
+> ⚠️ **Ground rule:** Legion imports from `models.py` but never edits it. Ammara imports nothing from routes. Tino uses `{{ url_for() }}` and never hardcodes URLs.
 
 ---
 
@@ -20,507 +20,790 @@ cat > /home/claude/campuseats/CAMPUSEATS_SPEC.md << 'ENDOFFILE'
 ```
 campuseats/
 │
-├── app.py                  # Legion — Flask app factory, config, run
-├── models.py               # Legion — All SQLAlchemy database models
+├── app.py                  # Legion — Flask app factory, config, blueprints
+├── models.py               # Ammara — All SQLAlchemy models
+├── seed.py                 # Ammara — Sample data for development
+│
 ├── routes/
 │   ├── auth.py             # Legion — Login, register, logout
-│   ├── student.py          # Legion — Menu, cart, place order, track order
-│   ├── staff.py            # Legion — Order queue, mark ready, sold out toggle
+│   ├── student.py          # Legion — Menu, place order, track order
+│   ├── staff.py            # Legion — Order queue, status updates
 │   └── admin.py            # Legion — Menu CRUD, stats, user management
 │
 ├── templates/
-│   ├── base.html           # Tino — Shared layout, navbar, footer
+│   ├── base.html           # Tino — Shared layout, navbar, flash messages
 │   ├── auth/
 │   │   ├── login.html      # Tino
 │   │   └── register.html   # Tino
 │   ├── student/
-│   │   ├── menu.html       # Tino — Main menu + cart UI
-│   │   └── track.html      # Tino — Order tracking screen
+│   │   ├── menu.html       # Tino — Menu grid + cart sidebar
+│   │   └── track.html      # Tino — Pickup code + progress bar
 │   ├── staff/
-│   │   └── dashboard.html  # Tino — Kanban order queue
+│   │   └── dashboard.html  # Tino — 3-column Kanban board
 │   └── admin/
 │       ├── dashboard.html  # Tino — Stats + charts
 │       ├── menu.html       # Tino — Menu manager table
 │       ├── orders.html     # Tino — All orders table
-│       └── students.html   # Tino — Student accounts table
+│       └── students.html   # Tino — Student accounts
 │
 ├── static/
-│   ├── css/
-│   │   └── style.css       # Tino — Global styles
+│   ├── css/style.css       # Tino — Global styles
 │   └── js/
-│       ├── menu.js         # Tino — Cart logic, add/remove items
-│       ├── staff.js        # Tino — Move orders between columns
-│       └── admin.js        # Tino — Charts, table filters
+│       ├── menu.js         # Tino — Cart logic + order submission
+│       ├── staff.js        # Tino — Column movement + auto-refresh
+│       └── admin.js        # Tino — Chart rendering
 │
-├── seed.py                 # Legion — Populate DB with sample data
-└── requirements.txt        # Legion — Python dependencies
+└── requirements.txt        # Legion
 ```
 
 ---
 
-## 🗄️ Database — Legion
+## 🗄️ AMMARA — Database
+
+Ammara owns everything related to the database. Legion and Tino depend on her finishing
+`models.py` and `seed.py` first before they can test their own code.
 
 ### How the tables connect
 
 ```
 users ──────────< orders >──────────< order_items >────────── menu_items
                      │
-                     ├──────────── promotions
+                     ├──────────── promotions (nullable FK)
                      │
                      └──────────── loyalty_points
 ```
 
-### Table descriptions
+---
 
-#### `users`
-Stores every person using the app. One table for all roles.
+### `models.py` — What Ammara builds
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | INT PK | Auto-increment |
-| student_number | VARCHAR | e.g. STU2024001, nullable for staff/admin |
-| name | VARCHAR | Full name |
-| email | VARCHAR UNIQUE | Login email |
-| password_hash | VARCHAR | Never store plain passwords — use `werkzeug.security` |
-| role | VARCHAR | `'student'` · `'staff'` · `'admin'` |
-| is_active | BOOL | Soft disable accounts without deleting |
-| created_at | DATETIME | Auto-set on insert |
-
-**Connected to:** `orders` (one user → many orders), `loyalty_points` (one user → many records)
+Six SQLAlchemy model classes. Each maps to one DB table.
 
 ---
 
-#### `menu_items`
-Every item the canteen sells.
+#### Class: `User`
+Table: `users`
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | INT PK | Auto-increment |
-| name | VARCHAR | e.g. "Beef Bunny Chow" |
-| description | VARCHAR | Short description shown on menu card |
-| price | FLOAT | In Rands, e.g. 38.0 |
-| category | VARCHAR | `'mains'` · `'snacks'` · `'drinks'` · `'breakfast'` |
-| emoji | VARCHAR | Single emoji for the card, e.g. 🍞 |
-| dietary | VARCHAR | `'none'` · `'vegetarian'` · `'halal'` · `'vegan'` |
-| is_available | BOOL | Staff toggle sold-out from dashboard |
-| created_at | DATETIME | Auto-set on insert |
+| id | Integer PK | Auto-increment |
+| student_number | String | e.g. STU2024001 — nullable for staff/admin |
+| name | String | Full name |
+| email | String UNIQUE | Login email |
+| password_hash | String | Never plain text — Legion calls `set_password()` |
+| role | String | `'student'` · `'staff'` · `'admin'` |
+| is_active | Boolean | Default True. Soft-disable without deleting |
+| created_at | DateTime | Auto-set to `datetime.utcnow` |
 
-**Connected to:** `order_items` (one menu item → many order_items across all orders)
+**Relationships to define:**
+- `orders` → one User has many Orders (`db.relationship('Order', backref='student')`)
+- `loyalty` → one User has many LoyaltyPoints records
 
----
-
-#### `orders`
-One row per student order placed.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | INT PK | Auto-increment |
-| user_id | INT FK → users.id | Who placed the order |
-| promo_id | INT FK → promotions.id | Nullable — only set if promo applied |
-| status | VARCHAR | `'new'` → `'preparing'` → `'ready'` → `'collected'` |
-| pickup_slot | VARCHAR | e.g. "12:15" |
-| subtotal | FLOAT | Sum of all order_items line totals |
-| service_fee | FLOAT | Default R2.00 |
-| total | FLOAT | subtotal + service_fee − discount |
-| pickup_code | VARCHAR UNIQUE | 5-char code shown to student, e.g. "AB7K2" |
-| created_at | DATETIME | Auto-set on insert |
-
-**Connected to:** `users` (FK), `order_items` (one order → many items), `promotions` (FK, nullable), `loyalty_points` (one order → one loyalty record)
-
----
-
-#### `order_items`
-Junction table — links orders to menu items. One row per item line in an order.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | INT PK | Auto-increment |
-| order_id | INT FK → orders.id | Which order |
-| menu_item_id | INT FK → menu_items.id | Which item |
-| quantity | INT | How many of this item |
-| unit_price | FLOAT | **Snapshot** of price at time of order (price may change later) |
-
-> ⚠️ **Why unit_price?** If the canteen changes a price, old orders must still show the original price. Always copy `menu_item.price` into `unit_price` when creating the order.
-
-**Connected to:** `orders` (FK) and `menu_items` (FK)
-
----
-
-#### `promotions`
-Discounts, daily specials, and loyalty rewards.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | INT PK | Auto-increment |
-| name | VARCHAR | e.g. "Bunny Chow + Coke Friday Special" |
-| type | VARCHAR | `'flat'` (R10 off) · `'percent'` (15% off) · `'loyalty'` (free item) |
-| discount_value | FLOAT | Amount or percentage to deduct |
-| is_active | BOOL | Toggle on/off from admin panel |
-| valid_from | DATE | Nullable — optional date range |
-| valid_until | DATE | Nullable |
-
-**Connected to:** `orders` (one promo → many orders that used it)
-
----
-
-#### `loyalty_points`
-Tracks points earned per order and maintains a running balance per student.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | INT PK | Auto-increment |
-| user_id | INT FK → users.id | Which student |
-| order_id | INT FK → orders.id | Which order earned these points |
-| points_earned | INT | Usually 1 point per order |
-| points_balance | INT | Running total at time of this record |
-| awarded_at | DATETIME | Auto-set on insert |
-
-> 💡 Every time an order reaches `'collected'`, Legion's backend creates a `LoyaltyPoints` row. At 10 points the student gets a free item.
-
----
-
-## ⚙️ Backend — Legion
-
-### `app.py`
-Sets up Flask, connects the database, registers route blueprints.
-
+**Methods Ammara must add:**
 ```python
-# What Legion needs to do here:
-# 1. Create Flask app instance
-# 2. Configure SQLite database URI
-# 3. Initialise SQLAlchemy with the app (db.init_app)
-# 4. Register blueprints: auth, student, staff, admin
-# 5. Create all tables on first run (db.create_all)
-# 6. Set a SECRET_KEY for session management
+def set_password(self, password):
+    # Legion calls this on register — hashes and stores password
+    self.password_hash = generate_password_hash(password)
+
+def check_password(self, password):
+    # Legion calls this on login — returns True/False
+    return check_password_hash(self.password_hash, password)
+
+@property
+def loyalty_balance(self):
+    # Returns the student's current points total
+    # Get the most recent LoyaltyPoints row for this user
+    # Return points_balance, or 0 if no rows exist
 ```
 
-**Connects to:** `models.py` (imports db), all files in `routes/`
+---
+
+#### Class: `MenuItem`
+Table: `menu_items`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | Auto-increment |
+| name | String | e.g. "Beef Bunny Chow" |
+| description | String | Short text shown on menu card |
+| price | Float | In Rands e.g. 38.0 |
+| category | String | `'mains'` · `'snacks'` · `'drinks'` · `'breakfast'` |
+| emoji | String | Single emoji e.g. 🍞 |
+| dietary | String | `'none'` · `'vegetarian'` · `'halal'` · `'vegan'` |
+| is_available | Boolean | Default True. Staff toggles this to mark sold out |
+| created_at | DateTime | Auto-set |
+
+**Relationships to define:**
+- `order_items` → one MenuItem appears in many OrderItems
+
+**Method Ammara must add:**
+```python
+def to_dict(self):
+    # Legion passes this to Tino's templates as JSON
+    # Must return: id, name, description, price, category, emoji, dietary, is_available
+```
+
+---
+
+#### Class: `Promotion`
+Table: `promotions`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | Auto-increment |
+| name | String | e.g. "Bunny Chow Friday Special" |
+| type | String | `'flat'` (R10 off) · `'percent'` (15% off) · `'loyalty'` (free item) |
+| discount_value | Float | The amount or percentage |
+| is_active | Boolean | Admin toggles this on/off |
+| valid_from | Date | Nullable — optional start date |
+| valid_until | Date | Nullable — optional end date |
+
+**Relationships to define:**
+- `orders` → one Promotion used in many Orders
+
+---
+
+#### Class: `Order`
+Table: `orders`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | Auto-increment |
+| user_id | Integer FK → users.id | Who placed the order |
+| promo_id | Integer FK → promotions.id | Nullable — only if promo applied |
+| status | String | `'new'` → `'preparing'` → `'ready'` → `'collected'` |
+| pickup_slot | String | e.g. "12:15" |
+| subtotal | Float | Sum of all OrderItem line totals |
+| service_fee | Float | Default 2.0 (R2) |
+| total | Float | subtotal + service_fee − any discount |
+| pickup_code | String UNIQUE | 5-char code shown to student e.g. "AB7K2" |
+| created_at | DateTime | Auto-set |
+
+**Relationships to define:**
+- `items` → one Order has many OrderItems (cascade delete)
+- `loyalty_record` → one Order generates one LoyaltyPoints row
+
+**Method Ammara must add:**
+```python
+def __init__(self, **kwargs):
+    super().__init__(**kwargs)
+    if not self.pickup_code:
+        self.pickup_code = self._generate_code()
+
+@staticmethod
+def _generate_code():
+    # Return a random 5-character uppercase alphanumeric string
+    # Use random.choices(string.ascii_uppercase + string.digits, k=5)
+    # Legion uses this code to display to the student on track.html
+
+def to_dict(self):
+    # Legion passes this to Tino's track.html and the JSON status endpoint
+    # Must return: id, status, pickup_slot, subtotal, service_fee,
+    #              total, pickup_code, created_at, items (list of OrderItem.to_dict())
+```
+
+---
+
+#### Class: `OrderItem`
+Table: `order_items`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | Auto-increment |
+| order_id | Integer FK → orders.id | Which order this line belongs to |
+| menu_item_id | Integer FK → menu_items.id | Which menu item |
+| quantity | Integer | How many of this item |
+| unit_price | Float | ⚠️ Snapshot of price at time of order — copy from MenuItem.price |
+
+> ⚠️ **Critical:** `unit_price` must be set from `menu_item.price` at the moment the order is created.
+> If the canteen later changes a price, old order history stays correct.
+
+**Method Ammara must add:**
+```python
+def to_dict(self):
+    # Used inside Order.to_dict() to list each item in an order
+    # Must return: menu_item_id, name, emoji, quantity, unit_price, line_total
+    # line_total = unit_price * quantity (rounded to 2 decimal places)
+```
+
+---
+
+#### Class: `LoyaltyPoints`
+Table: `loyalty_points`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | Integer PK | Auto-increment |
+| user_id | Integer FK → users.id | Which student earned the points |
+| order_id | Integer FK → orders.id | Which order triggered this |
+| points_earned | Integer | Usually 1 per order |
+| points_balance | Integer | Running total at the time of this record |
+| awarded_at | DateTime | Auto-set |
+
+> 💡 When Legion's staff route marks an order as `'collected'`, it calls a helper
+> that creates a new `LoyaltyPoints` row. Ammara does NOT write that logic — Legion does.
+> Ammara just defines the model so Legion can import and use it.
+
+---
+
+### `seed.py` — What Ammara builds
+
+Populate the database with sample data so Tino and Legion can test without entering data manually.
+
+**Ammara must seed:**
+
+```
+Users (at least one of each role):
+  - student: legion@campus.ac.za / password123 / STU2024001
+  - staff:   staff@campus.ac.za  / password123
+  - admin:   admin@campus.ac.za  / password123
+
+Menu items (at least 10 across all categories):
+  Mains:     Beef Bunny Chow (R38), Grilled Chicken Wrap (R42),
+             Veggie Burger (R35), Pap & Chakalaka (R28)
+  Snacks:    Boerewors Roll (R30), Samoosa x2 (R15), Fruit Cup (R22)
+             Cheese Toastie (R20) — set is_available=False
+  Drinks:    Rooibos Tea (R12), Coke 330ml (R14)
+  Breakfast: Jungle Oats (R18), Egg & Bacon Roll (R25)
+
+Promotions (at least 2):
+  - "Daily Special: Bunny Chow + Coke" — type='flat', discount_value=9.0, is_active=True
+  - "10th Meal Free" — type='loyalty', discount_value=30.0, is_active=True
+
+Sample orders (at least 3, with different statuses):
+  - One order with status='new'
+  - One with status='preparing'
+  - One with status='collected' (also needs a LoyaltyPoints row)
+```
+
+---
+
+## ⚙️ LEGION — Backend Routes
+
+Legion imports models from Ammara's `models.py` but never edits it.
+If Legion needs a new model method, he asks Ammara to add it.
+
+---
+
+### `app.py`
+
+```python
+# What Legion builds here:
+# 1. Create Flask app instance
+# 2. app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///campuseats.db'
+# 3. app.config['SECRET_KEY'] = 'dev-secret-change-in-production'
+# 4. db.init_app(app)  ← db imported from models.py
+# 5. Register blueprints: auth, student, staff, admin
+# 6. with app.app_context(): db.create_all()  ← creates tables on first run
+```
+
+---
+
+### Decorators Legion must write (put in a `utils.py`)
+
+```python
+def login_required(f):
+    # Check session['user_id'] exists
+    # If not → redirect to /login
+    # If yes → call the route function normally
+
+def role_required(*roles):
+    # Check session['role'] is in the allowed roles list
+    # If not → abort(403)
+    # Example usage: @role_required('admin') or @role_required('staff', 'admin')
+```
 
 ---
 
 ### `routes/auth.py`
-Handles login, registration, logout. Uses Flask sessions.
 
-| Route | Method | What it does |
-|-------|--------|--------------|
-| `/login` | GET | Render login.html |
-| `/login` | POST | Check email + password → set `session['user_id']` and `session['role']` → redirect |
-| `/register` | GET | Render register.html |
-| `/register` | POST | Create new User, hash password, save to DB → redirect to login |
-| `/logout` | GET | Clear session → redirect to login |
+| Route | Method | Action |
+|-------|--------|--------|
+| `/login` | GET | Render `auth/login.html` |
+| `/login` | POST | Validate credentials → set session → redirect by role |
+| `/register` | GET | Render `auth/register.html` |
+| `/register` | POST | Create User → redirect to `/login` |
+| `/logout` | GET | Clear session → redirect to `/login` |
 
-**Key functions:**
-- `login()` — query `User` by email, call `user.check_password()`, set session
-- `register()` — validate form, create `User`, call `user.set_password()`, `db.session.add()`, `db.session.commit()`
-- `login_required` decorator — check `session['user_id']` exists, else redirect to `/login`
-- `role_required(role)` decorator — check `session['role']` matches, else 403
+**`login()` logic:**
+```
+1. Get email + password from form
+2. Query: User.query.filter_by(email=email).first()
+3. If no user or user.check_password(password) is False → flash error, re-render login
+4. Set session['user_id'] = user.id
+5. Set session['role'] = user.role
+6. Redirect: student → /menu | staff → /staff | admin → /admin
+```
+
+**`register()` logic:**
+```
+1. Get name, email, student_number, password from form
+2. Check email not already in DB
+3. Create User(name=..., email=..., student_number=..., role='student')
+4. Call user.set_password(password)  ← Ammara's method
+5. db.session.add(user), db.session.commit()
+6. flash('Account created. Please log in.')
+7. Redirect to /login
+```
 
 ---
 
 ### `routes/student.py`
-Everything the student interacts with after login.
 
-| Route | Method | What it does |
-|-------|--------|--------------|
-| `/menu` | GET | Query all available `MenuItem` → render menu.html |
-| `/order` | POST | Receive cart JSON, create `Order` + `OrderItem` rows, return order id |
-| `/order/<id>/track` | GET | Query `Order` by id → render track.html with status |
-| `/order/<id>/status` | GET | JSON endpoint — Tino's JS polls this every 5s to update status live |
+| Route | Method | Action |
+|-------|--------|--------|
+| `/menu` | GET | Query available menu items → render student/menu.html |
+| `/order` | POST | Receive cart JSON → create Order + OrderItems → return order id |
+| `/order/<int:id>/track` | GET | Query Order → render student/track.html |
+| `/order/<int:id>/status` | GET | Return `{"status": "..."}` JSON — Tino polls this |
 
-**Key functions:**
-- `place_order()` — receives `{cart: [{menu_item_id, quantity}], pickup_slot}` as JSON. Validates each item is available. Calculates subtotal. Creates `Order` then loops through cart to create `OrderItem` rows. Commits everything together.
-- `get_order_status()` — returns `{"status": "preparing"}` as JSON for the polling endpoint
+**`menu()` logic:**
+```
+1. Query: MenuItem.query.filter_by(is_available=True).all()
+2. Pass items as list of dicts using item.to_dict()  ← Ammara's method
+3. Render menu.html with items
+```
 
-**Connects to:** `MenuItem`, `Order`, `OrderItem` models
+**`place_order()` logic:**
+```
+1. Parse JSON from request: {cart: [{menu_item_id, quantity}], pickup_slot}
+2. For each cart item:
+   a. Query MenuItem by id
+   b. If not found or is_available=False → return error JSON
+3. Calculate subtotal = sum(item.price * quantity for each cart item)
+4. Create Order(user_id=session['user_id'], subtotal=..., service_fee=2.0,
+                total=subtotal+2.0, pickup_slot=...)
+   ← pickup_code auto-generated by Ammara's __init__
+5. db.session.add(order), db.session.flush()  ← get order.id before commit
+6. For each cart item:
+   Create OrderItem(order_id=order.id, menu_item_id=...,
+                    quantity=..., unit_price=menu_item.price)
+   db.session.add(order_item)
+7. db.session.commit()
+8. Return JSON: {"order_id": order.id}
+```
+
+**`track_order()` logic:**
+```
+1. Query Order by id
+2. Check order.user_id == session['user_id'] (security — students can't see others' orders)
+3. Render track.html with order.to_dict()  ← Ammara's method
+```
 
 ---
 
 ### `routes/staff.py`
-The kitchen-facing order queue.
 
-| Route | Method | What it does |
-|-------|--------|--------------|
-| `/staff` | GET | Query all non-collected orders → render staff/dashboard.html |
-| `/staff/order/<id>/status` | POST | Update `order.status` → redirect back |
-| `/staff/menu/<id>/toggle` | POST | Flip `menu_item.is_available` → redirect back |
-| `/staff/orders/live` | GET | JSON of all active orders — for auto-refresh |
+| Route | Method | Action |
+|-------|--------|--------|
+| `/staff` | GET | Query active orders → render staff/dashboard.html |
+| `/staff/order/<int:id>/status` | POST | Update order status |
+| `/staff/menu/<int:id>/toggle` | POST | Flip MenuItem.is_available |
+| `/staff/orders/live` | GET | Return all active orders as JSON (Tino polls this) |
 
-**Key functions:**
-- `update_order_status()` — receives `new_status` from form, validates it's a legal transition, updates and commits. If status becomes `'collected'`, also calls `award_loyalty_point()`
-- `award_loyalty_point()` — creates a `LoyaltyPoints` row. Gets the student's previous balance, adds 1.
-- `toggle_availability()` — flips `is_available` on a `MenuItem`
+**`update_status()` logic:**
+```
+1. Get new_status from form data
+2. Validate new_status is one of: 'preparing', 'ready', 'collected'
+3. Query Order by id, update order.status
+4. If new_status == 'collected': call award_loyalty_point(order)
+5. db.session.commit()
+6. Redirect back to /staff
+```
 
-**Connects to:** `Order`, `MenuItem`, `LoyaltyPoints` models
+**`award_loyalty_point(order)` helper:**
+```
+1. Get the student's most recent LoyaltyPoints row to find their current balance
+2. current_balance = last_record.points_balance if last_record else 0
+3. Create LoyaltyPoints(user_id=order.user_id, order_id=order.id,
+                         points_earned=1, points_balance=current_balance+1)
+4. db.session.add(lp), db.session.commit()
+```
+
+**`toggle_availability()` logic:**
+```
+1. Query MenuItem by id
+2. item.is_available = not item.is_available
+3. db.session.commit()
+4. Redirect back to /staff
+```
 
 ---
 
 ### `routes/admin.py`
-Full control panel for the canteen manager.
 
-| Route | Method | What it does |
-|-------|--------|--------------|
+| Route | Method | Action |
+|-------|--------|--------|
 | `/admin` | GET | Aggregate stats + recent orders → render admin/dashboard.html |
+| `/admin/stats` | GET | JSON for Tino's charts |
 | `/admin/menu` | GET | All menu items → render admin/menu.html |
-| `/admin/menu/add` | POST | Create new `MenuItem` from form data |
-| `/admin/menu/<id>/edit` | POST | Update existing `MenuItem` |
-| `/admin/menu/<id>/delete` | POST | Delete `MenuItem` |
-| `/admin/orders` | GET | All orders, filterable by status/date |
-| `/admin/students` | GET | All students + order count + loyalty balance |
-| `/admin/stats` | GET | JSON stats for charts (orders per hour, top items) |
+| `/admin/menu/add` | POST | Create new MenuItem |
+| `/admin/menu/<int:id>/edit` | POST | Update existing MenuItem |
+| `/admin/menu/<int:id>/delete` | POST | Delete MenuItem |
+| `/admin/orders` | GET | All orders (filterable) → render admin/orders.html |
+| `/admin/students` | GET | All students → render admin/students.html |
 
-**Key functions:**
-- `dashboard()` — runs aggregate queries: total orders today, total revenue today, avg wait time, active student count
-- `get_stats()` — returns JSON used by Tino's chart JS: `{hourly: [...], top_items: [...]}`
-- `add_menu_item()` — validates form, creates and commits new `MenuItem`
-- `delete_menu_item()` — checks no active orders use this item before deleting
+**`dashboard()` stats to calculate:**
+```python
+from datetime import date
+today = date.today()
 
-**Connects to:** All models
+total_orders_today  = Order.query.filter(db.func.date(Order.created_at) == today).count()
+revenue_today       = db.session.query(db.func.sum(Order.total))\
+                        .filter(db.func.date(Order.created_at) == today).scalar() or 0
+active_students     = User.query.filter_by(role='student', is_active=True).count()
+recent_orders       = Order.query.order_by(Order.created_at.desc()).limit(5).all()
+```
+
+**`get_stats()` JSON response for charts:**
+```python
+# Hourly breakdown — count orders grouped by hour for today
+# Top items — count OrderItems grouped by menu_item_id, get top 5
+# Return: {"hourly": [{"hour": "08:00", "count": 3}, ...],
+#          "top_items": [{"name": "Bunny Chow", "count": 42}, ...]}
+```
+
+**`add_menu_item()` logic:**
+```
+1. Get all fields from form: name, description, price, category, emoji, dietary
+2. Create MenuItem(...), db.session.add(), db.session.commit()
+3. flash('Item added.'), redirect to /admin/menu
+```
+
+**`delete_menu_item()` logic:**
+```
+1. Query MenuItem by id
+2. Check no active Order (status != 'collected') contains this item
+   If yes → flash error, redirect (can't delete item with live orders)
+3. db.session.delete(item), db.session.commit()
+4. Redirect to /admin/menu
+```
 
 ---
 
-## 🎨 Frontend — Tino
+## 🎨 TINO — Frontend
+
+Tino can start building templates as soon as Ammara has finished `seed.py` and the DB is seeded,
+and as soon as Legion has the routes returning data.
+
+---
 
 ### Design rules
-- Dark theme for Staff dashboard (`#111210` background)
-- Light warm theme for Student menu and Admin panel (`#F7F4EF` background)
-- Font: `DM Sans` for body, `Syne` for headings (Google Fonts)
-- No box-shadow or glow effects — use `border: 0.5px solid` for card outlines
-- Accent colour: `#E85D24` (orange) for buttons and highlights
-- All hover states: change `border-color` only, no shadows
-- Rounded cards: `border-radius: 10px–12px`
+- **Student + Admin:** Light warm background `#F7F4EF`, surface `#FFFFFF`, border `#E2DDD6`
+- **Staff dashboard:** Dark background `#111210`, surface `#1C1D1A`, border `#2E2F2B`
+- **Accent orange:** `#E85D24` — buttons, highlights, active states
+- **Accent navy:** `#2E4057` — admin sidebar, secondary elements
+- **Fonts:** `DM Sans` body + `Syne` headings (Google Fonts CDN)
+- **No box-shadow or glow** — use `border: 0.5px solid` for card outlines only
+- **Hover states:** Change `border-color` only, never add shadow
+- **Border radius:** `10px–12px` on cards, `20px` on pills/chips, `7px–8px` on inputs
 
 ---
 
 ### `templates/base.html`
-The shared layout every other template extends.
 
 ```html
-<!-- What Tino builds here: -->
-<!-- 1. <head> with Google Fonts link, CSS link, meta tags -->
-<!-- 2. <nav> with logo, role-aware links (student/staff/admin show different navs) -->
-<!-- 3. {% block content %}{% endblock %} for page content -->
-<!-- 4. Flash message display (Legion will flash messages from routes) -->
-<!-- 5. <script> tags for JS files at bottom -->
-```
+<!-- What Tino builds: -->
+<!-- 1. <head>: Google Fonts, /static/css/style.css, viewport meta -->
+<!-- 2. <nav> — role-aware links using session['role'] passed by Legion: -->
+<!--    student → Menu, My Orders -->
+<!--    staff   → Order Queue -->
+<!--    admin   → Dashboard, Menu Manager, Orders, Students -->
+<!-- 3. Flash message block (Legion flashes messages on actions) -->
+<!-- 4. {% block content %}{% endblock %} -->
+<!-- 5. <script> tags at bottom -->
 
-**Jinja variables Legion will pass:** `current_user` (name, role), `flash messages`
+<!-- Jinja variables Legion always passes to every template: -->
+<!-- current_user_name (string), current_role (string) -->
+```
 
 ---
 
 ### `templates/student/menu.html`
-The main student screen. Extends `base.html`.
 
-**What Tino builds:**
-- Category filter tabs (All / Mains / Snacks / Drinks / Breakfast)
-- Search bar
-- Menu item cards in a 2-column grid showing emoji, name, description, price, add button
-- Sticky cart panel on the right showing items, subtotal, total, pickup slot selector
-- "Place order" button that submits cart to Legion's `/order` POST route
+**Layout:** Left = scrollable menu grid. Right = sticky cart panel (300px wide).
 
-**JS file: `static/js/menu.js`**
-- Manages cart state (add, remove, change quantity) in a JS object
-- On "Place order" click: `fetch('/order', {method:'POST', body: JSON.stringify(cart)})` → redirect to `/order/<id>/track`
-- Category filter: show/hide cards by `data-category` attribute
-- Search: filter cards by name as user types
+**Menu grid (left):**
+- Search bar at top
+- Category filter tabs: All / Mains / Snacks / Drinks / Breakfast / 🌿 Veg
+- 2-column card grid — each card has: emoji, dietary badge (if veg/halal), name, description, price, add button
+- Sold-out cards show "Sold out" badge, grey out content, no add button
 
-**Jinja variables Legion will pass:** `menu_items` (list of dicts from `MenuItem.to_dict()`)
+**Cart panel (right):**
+- Pickup slot `<select>` — slots every 15 min from 11:30 to 13:30
+- Empty state message when no items added
+- Cart item rows: emoji, name, qty controls (−/+), line total
+- Subtotal + R2 service fee + Total
+- "Place order" button — disabled when cart empty
+
+**Jinja variables Legion passes:**
+```python
+render_template('student/menu.html', items=[item.to_dict() for item in menu_items])
+```
+
+**`static/js/menu.js` — what Tino writes:**
+```javascript
+// Cart state object: { menu_item_id: {name, emoji, price, quantity} }
+// addItem(id, name, emoji, price) — add to cart or increment qty
+// removeItem(id) — decrement qty, remove if 0
+// renderCart() — update cart panel DOM
+// placeOrder() — on button click:
+//   POST to /order with JSON: { cart: [...], pickup_slot: "12:15" }
+//   On success: window.location = '/order/' + data.order_id + '/track'
+```
 
 ---
 
 ### `templates/student/track.html`
-Order tracking page after placing an order.
+
+**Layout:** Centered card, max-width 480px.
 
 **What Tino builds:**
-- Large pickup code display (e.g. `AB7K2`)
+- Large pickup code display (e.g. `AB7K2`) in monospace font, big and bold
 - 4-step progress bar: Placed → Preparing → Ready → Collected
-- Order items summary
-- Auto-refreshing status (every 5 seconds)
+  - Active step highlighted in accent orange
+- Order summary: list of items with quantities
+- Pickup slot reminder
+- Auto-refresh status every 5 seconds
 
-**JS in page:**
-```javascript
-// Poll Legion's status endpoint every 5 seconds
-setInterval(async () => {
-  const res = await fetch('/order/{{ order.id }}/status');
-  const data = await res.json();
-  updateProgressBar(data.status); // Tino writes updateProgressBar()
-}, 5000);
+**Jinja variables Legion passes:**
+```python
+render_template('student/track.html', order=order.to_dict())
 ```
 
-**Jinja variables Legion will pass:** `order` (id, status, pickup_code, items, pickup_slot)
+**JS Tino writes inline in this template:**
+```javascript
+const orderId = {{ order.id }};
+let currentStatus = "{{ order.status }}";
+
+setInterval(async () => {
+  const res = await fetch(`/order/${orderId}/status`);
+  const data = await res.json();
+  if (data.status !== currentStatus) {
+    currentStatus = data.status;
+    updateProgressBar(currentStatus); // Tino writes this
+  }
+}, 5000);
+```
 
 ---
 
 ### `templates/staff/dashboard.html`
-Three-column Kanban board for kitchen staff.
 
-**What Tino builds:**
-- 3 columns: New Orders / Preparing / Ready for Pickup
-- Each order card shows: order ID, student name, pickup slot, item list, action button
-- Stats bar at top: new count, preparing count, completed today, avg wait
-- Sold-out toggle chips at the bottom of the Ready column
+**Layout:** Dark theme. Full viewport height. Three columns side by side.
 
-**JS file: `static/js/staff.js`**
-- "Start cooking" button → `fetch('/staff/order/<id>/status', {method:'POST', body: 'new_status=preparing'})` then move card to Preparing column
-- "Mark ready" → same but `new_status=ready`
-- "Collected" → `new_status=collected`
-- Auto-refresh orders every 10 seconds via `/staff/orders/live` JSON endpoint
+**Top bar:** Logo + "Staff View" label + live clock (JS `setInterval`)
 
-**Jinja variables Legion will pass:** `new_orders`, `preparing_orders`, `ready_orders` (lists of order dicts)
+**Stats row under topbar:** New orders count / Preparing count / Completed today / Avg wait
+
+**Three columns:**
+- **New Orders** — red left border on cards, "Start cooking" button
+- **Preparing** — amber left border, "Mark ready" button
+- **Ready for Pickup** — green left border, "Collected" button
+
+**Each order card shows:** Order ID (monospace), student name, pickup slot, item list with quantities
+
+**Bottom of Ready column:** Sold-out toggle chips for each menu item
+
+**Jinja variables Legion passes:**
+```python
+render_template('staff/dashboard.html',
+  new_orders=[o.to_dict() for o in new_orders],
+  preparing_orders=[o.to_dict() for o in preparing_orders],
+  ready_orders=[o.to_dict() for o in ready_orders],
+  menu_items=[item.to_dict() for item in all_items])
+```
+
+**`static/js/staff.js` — what Tino writes:**
+```javascript
+// moveOrder(orderId, newStatus):
+//   POST to /staff/order/{orderId}/status with body: new_status=preparing
+//   On success: move card DOM element to correct column
+
+// Auto-refresh every 10 seconds:
+//   GET /staff/orders/live → re-render all three columns from JSON
+
+// toggleSoldOut(itemId):
+//   POST to /staff/menu/{itemId}/toggle
+//   Toggle chip styling on/off
+```
 
 ---
 
 ### `templates/admin/dashboard.html`
-Overview page with stats and charts.
 
-**What Tino builds:**
-- 4 stat cards: Orders today, Revenue today, Avg wait, Active students
-- Bar chart (orders per hour) — use Chart.js from CDN
-- Horizontal bar chart (top items)
-- Recent orders table
+**Layout:** Light theme. Sidebar (200px) + main content area.
 
-**JS file: `static/js/admin.js`**
+**Sidebar** (same across all admin pages — put in a partial `_sidebar.html`):
+- Logo + "Admin Panel" role label
+- Nav links: Dashboard, All Orders, Menu Manager, Promotions, Students, Settings
+- Active link highlighted
+
+**Stats row:** Orders today / Revenue today (R) / Avg wait time / Active students
+
+**Charts section:**
+- Bar chart — orders per hour (use Chart.js from CDN)
+- Horizontal bar — top 5 selling items
+
+**Recent orders table** (last 5): Order ID, Student, Items, Total, Status pill, Time
+
+**`static/js/admin.js` — what Tino writes:**
 ```javascript
-// Fetch stats from Legion's /admin/stats endpoint and render charts
-fetch('/admin/stats')
-  .then(r => r.json())
-  .then(data => {
-    renderHourlyChart(data.hourly);   // Tino writes this
-    renderTopItems(data.top_items);   // Tino writes this
-  });
+// On page load, fetch /admin/stats then:
+// renderHourlyChart(data.hourly) — Chart.js bar chart
+// renderTopItems(data.top_items) — horizontal bars (can be plain CSS divs, no chart library needed)
 ```
-
-**Jinja variables Legion will pass:** `stats` dict, `recent_orders` list
 
 ---
 
 ### `templates/admin/menu.html`
-Menu management table.
 
 **What Tino builds:**
-- Category filter tabs
-- Table with columns: Item, Category, Price, Dietary, Available toggle, Edit/Delete buttons
-- "Add item" button that opens a modal form
-- Modal form: name, emoji, price, category, description, dietary dropdowns
+- Category filter tabs (filter table rows by JS, no page reload)
+- Table: Item (emoji + name), Category, Price, Dietary badge, Available toggle, Edit / Delete buttons
+- "Add item" button → opens modal form
+- Modal form fields: Name, Emoji, Price, Category (select), Description, Dietary (select)
 
-**How it connects to Legion:**
-- The available toggle is a `<form method="POST" action="/admin/menu/<id>/toggle">` — no JS needed, plain form submit
-- Add item modal submits to `POST /admin/menu/add`
-- Delete button submits to `POST /admin/menu/<id>/delete`
+**How actions connect to Legion:**
+```html
+<!-- Available toggle — plain form, no JS needed -->
+<form method="POST" action="/admin/menu/{{ item.id }}/toggle">
+  <button type="submit">Toggle</button>
+</form>
+
+<!-- Add item modal submits to -->
+<form method="POST" action="/admin/menu/add"> ... </form>
+
+<!-- Delete button -->
+<form method="POST" action="/admin/menu/{{ item.id }}/delete">
+  <button type="submit" onclick="return confirm('Delete this item?')">Delete</button>
+</form>
+```
 
 ---
 
-## 🔗 How everything connects end-to-end
-
-### Example flow: Student places an order
+## 🔗 End-to-end flow: Student places an order
 
 ```
 1. Tino's menu.html loads
-   └── Legion's GET /menu route queries MenuItem table, passes list to template
+   └── Legion's GET /menu queries MenuItem (Ammara's model), passes to template
 
 2. Student adds items → Tino's menu.js updates cart object in memory
 
 3. Student clicks "Place Order"
-   └── Tino's menu.js sends POST /order with JSON cart
+   └── Tino's menu.js POSTs to /order with JSON cart
 
 4. Legion's place_order() route:
-   └── Creates Order row (status='new', generates pickup_code)
-   └── Loops cart → creates OrderItem rows (copies price snapshot)
-   └── Commits to DB
+   └── Validates each item is available (queries Ammara's MenuItem)
+   └── Creates Order row (Ammara's model — pickup_code auto-generated)
+   └── Creates OrderItem rows (copies unit_price from MenuItem.price)
+   └── Commits all to DB
    └── Returns {"order_id": 42}
 
-5. Tino's JS redirects to /order/42/track
+5. Tino's JS redirects browser to /order/42/track
 
-6. Tino's track.html renders with order data
-   └── JS polls GET /order/42/status every 5s
+6. Legion's track_order() queries Order, passes order.to_dict() to track.html
 
-7. Staff sees order in New column on staff dashboard
-   └── Clicks "Start cooking" → POST /staff/order/42/status (preparing)
-   └── Clicks "Mark ready" → POST /staff/order/42/status (ready)
+7. Tino's track.html renders pickup code + progress bar
+   └── JS polls GET /order/42/status every 5 seconds
 
-8. Tino's polling detects status='ready'
-   └── Progress bar jumps to step 3, student goes to collect
+8. Staff sees new order card on Tino's staff dashboard
+   └── Clicks "Start cooking" → Tino's staff.js POSTs to /staff/order/42/status
+   └── Legion updates Order.status = 'preparing' (Ammara's model)
 
-9. Staff clicks "Collected" → POST /staff/order/42/status (collected)
-   └── Legion's route also calls award_loyalty_point(user_id=student.id, order_id=42)
+9. Tino's polling picks up status change → moves progress bar forward
+
+10. Staff clicks "Mark ready" → status = 'ready'
+    └── Student's progress bar shows "Ready — go collect!"
+
+11. Staff clicks "Collected" → status = 'collected'
+    └── Legion also calls award_loyalty_point() helper
+    └── Ammara's LoyaltyPoints model gets a new row
 ```
 
 ---
 
-## 📦 Dependencies — Legion sets up
+## ✅ Task Checklists
 
-**`requirements.txt`**
+### Ammara — Database
+- [ ] `models.py` — `User` class with `set_password`, `check_password`, `loyalty_balance`
+- [ ] `models.py` — `MenuItem` class with `to_dict`
+- [ ] `models.py` — `Promotion` class
+- [ ] `models.py` — `Order` class with `__init__` (auto pickup_code), `to_dict`
+- [ ] `models.py` — `OrderItem` class with `to_dict`
+- [ ] `models.py` — `LoyaltyPoints` class
+- [ ] `models.py` — All relationships defined with `db.relationship`
+- [ ] `seed.py` — 3 users (student/staff/admin), 12 menu items, 2 promos, 3 sample orders
+
+### Legion — Backend
+- [ ] `app.py` — Flask setup, DB config, blueprint registration
+- [ ] `utils.py` — `login_required` and `role_required` decorators
+- [ ] `routes/auth.py` — login, register, logout
+- [ ] `routes/student.py` — menu GET, place_order POST, track_order GET, order_status JSON
+- [ ] `routes/staff.py` — dashboard, update_status, toggle_availability, live orders JSON
+- [ ] `routes/admin.py` — dashboard, stats JSON, menu CRUD, orders list, students list
+- [ ] `requirements.txt`
+
+### Tino — Frontend
+- [ ] `templates/base.html` — layout, nav, flash messages
+- [ ] `templates/auth/login.html`
+- [ ] `templates/auth/register.html`
+- [ ] `templates/student/menu.html` — grid + cart sidebar
+- [ ] `templates/student/track.html` — pickup code + progress bar + polling JS
+- [ ] `templates/staff/dashboard.html` — 3-column Kanban dark UI
+- [ ] `templates/admin/dashboard.html` — stats + charts
+- [ ] `templates/admin/menu.html` — table + add modal
+- [ ] `templates/admin/orders.html` — orders table
+- [ ] `templates/admin/students.html` — student accounts table
+- [ ] `static/css/style.css` — all global styles
+- [ ] `static/js/menu.js` — cart logic + order fetch
+- [ ] `static/js/staff.js` — order movement + auto-refresh
+- [ ] `static/js/admin.js` — chart rendering
+
+---
+
+## 📌 Rules for everyone
+
+1. **Ammara never edits routes. Legion never edits models. Tino never hardcodes URLs.**
+2. **Tino always uses `{{ url_for('blueprint.function_name') }}`** — never `/admin/menu` directly
+3. **Legion always imports from `models.py`** — `from models import User, MenuItem, Order, OrderItem, LoyaltyPoints, db`
+4. **unit_price must be snapshotted** — Legion copies `menu_item.price` into `OrderItem.unit_price` at order creation. Never reference `menu_item.price` for historical orders.
+5. **Passwords are never stored plain** — Legion calls `user.set_password()` always
+6. **Check `is_available` before accepting an order** — Legion validates every item in the cart
+7. **Legion flashes messages, Tino displays them** — `flash('Order placed!')` in routes, `{{ get_flashed_messages() }}` in `base.html`
+
+---
+
+## 📦 Dependencies
+
+**`requirements.txt` (Legion creates this)**
 ```
 flask
 flask-sqlalchemy
 werkzeug
 ```
 
-Install with:
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 🚀 How to run
+## 🚀 Running the project
 
 ```bash
-# 1. Clone / set up the project folder
-cd campuseats
-
-# 2. Install dependencies (Legion)
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# 3. Seed the database with sample data (Legion)
+# 2. Seed the database (Ammara runs this first)
 python seed.py
 
-# 4. Run the app
+# 3. Start the server (Legion runs this)
 python app.py
 
-# 5. Open in browser
-# http://localhost:5000
+# 4. Open in browser
+http://localhost:5000
+
+# Test logins:
+# Student → legion@campus.ac.za / password123
+# Staff   → staff@campus.ac.za  / password123
+# Admin   → admin@campus.ac.za  / password123
 ```
-
----
-
-## ✅ Task Checklist
-
-### Legion — Backend
-- [ ] `app.py` — Flask setup, DB config, blueprint registration
-- [ ] `models.py` — All 6 SQLAlchemy models
-- [ ] `routes/auth.py` — Login, register, logout, decorators
-- [ ] `routes/student.py` — Menu GET, order POST, track GET, status JSON
-- [ ] `routes/staff.py` — Dashboard, status update, toggle availability, live JSON
-- [ ] `routes/admin.py` — Dashboard, menu CRUD, orders list, stats JSON
-- [ ] `seed.py` — Sample menu items, test users (student/staff/admin)
-- [ ] `requirements.txt`
-
-### Tino — Frontend
-- [ ] `templates/base.html` — Shared layout, nav, flash messages
-- [ ] `templates/auth/login.html`
-- [ ] `templates/auth/register.html`
-- [ ] `templates/student/menu.html` — Menu grid + cart panel
-- [ ] `templates/student/track.html` — Pickup code + progress bar
-- [ ] `templates/staff/dashboard.html` — 3-column Kanban
-- [ ] `templates/admin/dashboard.html` — Stats + charts
-- [ ] `templates/admin/menu.html` — Menu table + add modal
-- [ ] `templates/admin/orders.html` — Orders table + filters
-- [ ] `templates/admin/students.html` — Student accounts table
-- [ ] `static/css/style.css` — Global styles
-- [ ] `static/js/menu.js` — Cart logic + order submission
-- [ ] `static/js/staff.js` — Order column movement + auto-refresh
-- [ ] `static/js/admin.js` — Chart rendering
-
----
-
-## 📌 Important rules for both
-
-1. **Never store plain passwords** — Legion uses `werkzeug.security.generate_password_hash`
-2. **Always snapshot `unit_price`** — copy `menu_item.price` into `order_item.unit_price` at order creation time
-3. **Check `is_available`** — Legion's `place_order()` must reject items with `is_available=False`
-4. **Role checks on every route** — use the `login_required` and `role_required` decorators
-5. **Tino uses `{{ url_for('blueprint.function') }}`** — never hardcode URLs in templates
-6. **Legion flashes messages** — use `flash('Order placed!')` so Tino's base template can display them
-
-ENDOFFILE
-echo "Done"
