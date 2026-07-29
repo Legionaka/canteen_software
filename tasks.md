@@ -171,7 +171,7 @@ users ──────────< orders >──────────< or
 
 ---
 
-### `seed.py` — Sample Data
+### `seed.py` — Sample Data(Placeholders - will obtain real menu items in future)
 
 **Users**
 | Name | Email | Role | Student No. |
