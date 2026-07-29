@@ -1,1 +1,3 @@
-# Login, register, logout, and password reset routes for the application.
+from flask import Blueprint, render_template, request, redirect, url_for
+
+auth_bp = Blueprint('auth', __name__)
