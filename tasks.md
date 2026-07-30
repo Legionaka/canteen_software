@@ -369,11 +369,11 @@ Tino's templates → display data, forms and JS send requests back to
 ## ✅ Task Checklists
 
 ### Ammara
-- [✓] Supabase project set up, `DATABASE_URL` shared with Legion
-- [✓] All 6 tables created in Supabase
-- [✓] RLS disabled on all tables
-- [ ] `models.py` — all 6 classes with relationships and methods
-- [ ] `seed.py` — users, menu items, promotions, sample orders
+[✓] Supabase project set up, `DATABASE_URL` shared with Legion
+[✓] All 6 tables created in Supabase
+[✓] RLS disabled on all tables
+[✓] `models.py` — all 6 classes with relationships and methods
+[✓] `seed.py` — users, menu items, promotions, sample orders
 
 ### Legion
 - [ ] `.gitignore`
