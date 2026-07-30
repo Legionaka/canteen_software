@@ -1,5 +1,10 @@
 from datetime import datetime, date
 from models import db, User, MenuItem, Promotion, Order, OrderItem, LoyaltyPoints
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+import os
+from dotenv import load_dotenv
+
 import random
 import string
 
@@ -83,9 +88,11 @@ def seed_data(app):
         print("Database seeded successfully!")
 
 if __name__ == '__main__':
-    from flask import Flask
     app = Flask(__name__)
-    app.config["SQLALCHEMY_DATABASE_URI"] = "https://yawreapwqszbebyuqezo.supabase.co"
+    load_dotenv()  
+    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///app.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
     db.init_app(app)
     seed_data(app)
+    app.run(debug=True)
 

@@ -18,6 +18,9 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     orders = relationship('Order', backref='user', lazy=True)
     loyalty_records = relationship('LoyaltyPoints', backref='user', lazy=True)
 
@@ -43,7 +46,10 @@ class MenuItem(db.Model):
     is_available = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    order_items = relationship('OrderItem', backref='menu_item', lazy=True)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    # order_items = relationship('OrderItem', backref='back_populates', lazy=True)
 
     def to_dict(self):
         return {
@@ -66,6 +72,9 @@ class Promotion(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     valid_from = db.Column(db.Date, nullable=True)
     valid_until = db.Column(db.Date, nullable=True)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     orders = relationship('Order', backref='promotion', lazy=True)
 
@@ -113,6 +122,13 @@ class OrderItem(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
 
+    menu_item = relationship('MenuItem')
+
+    menu_item = relationship('MenuItem', backref=backref('order_items', lazy=True))
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -131,3 +147,6 @@ class LoyaltyPoints(db.Model):
     points_earned = db.Column(db.Integer, default=1)
     points_balance = db.Column(db.Integer, nullable=False) # Running total
     awarded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
