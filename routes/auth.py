@@ -17,6 +17,7 @@ def login():
     if not user or not user.check_password(password):
         flash("Invalid email or password.", "error")
         return render_template('auth/login.html'), 401
+    
     session.clear()
     session['user_id'] = user.id
     session['role'] = user.role
