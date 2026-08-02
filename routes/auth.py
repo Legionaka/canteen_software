@@ -3,8 +3,6 @@ from models import db, User
 
 auth_bp = Blueprint('auth', __name__)
 
-from flask import render_template, request, flash, redirect, url_for, session
-
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
@@ -36,5 +34,30 @@ def login():
     flash("Account configuration error. Please contact support.", "warning")
     return redirect(url_for('auth.login'))
 
+@auth_bp.route('/logout', methods=['GET'])
+def logout():
+    session.clear()
+    return redirect(url_for('auth.login'))
 
-    
+@auth_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'GET':
+        return render_template('auth/register.html')
+
+    name = request.form.get('name', '').strip().lower()
+    student_number = request.form.get('student_number', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    password = request.form.get('password', '') 
+    user_exist = User.query.filter_by(email=email).first()
+
+    if user_exist:
+        flash('Email already registered.')
+        return render_template('auth/register.html')
+
+    user = User(name=name, student_number=student_number, email=email, role='student')
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+
+    flash('Registration successful. Please login.')
+    return redirect(url_for('auth.login'))
