@@ -3,8 +3,3 @@ flask-sqlalchemy
 werkzeug
 python-dotenv
 psycopg2-binary
-
-
-
-
-# db password = habibi hayati roohi

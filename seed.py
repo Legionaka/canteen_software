@@ -1,16 +1,16 @@
 from datetime import datetime, date
 from models import db, User, MenuItem, Promotion, Order, OrderItem, LoyaltyPoints
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 import os
 from dotenv import load_dotenv
 
 import random
 import string
 
+
 def seed_data(app):
     with app.app_context():
-        db.create_all() # 6 tables are created
+        db.create_all()  # 6 tables are created
 
         # Clear existing data (optional, for development)
         db.session.query(LoyaltyPoints).delete()
@@ -33,18 +33,18 @@ def seed_data(app):
 
         # Menu Items
         menu_items_data = [
-            {"name": "Beef Bunny Chow", "description": "", "price": 38.0, "category": "mains", "emoji": "", "dietary": "none", "is_available": True},
-            {"name": "Grilled Chicken Wrap", "description": "", "price": 42.0, "category": "mains", "emoji": "", "dietary": "halal", "is_available": True},
-            {"name": "Veggie Burger", "description": "", "price": 35.0, "category": "mains", "emoji": "", "dietary": "vegetarian", "is_available": True},
-            {"name": "Pap & Chakalaka", "description": "", "price": 28.0, "category": "mains", "emoji": "", "dietary": "vegetarian", "is_available": True},
-            {"name": "Boerewors Roll", "description": "", "price": 30.0, "category": "snacks", "emoji": "", "dietary": "none", "is_available": True},
-            {"name": "Samoosa x2", "description": "", "price": 15.0, "category": "snacks", "emoji": "", "dietary": "halal", "is_available": True},
-            {"name": "Fruit Cup", "description": "", "price": 22.0, "category": "snacks", "emoji": "", "dietary": "vegetarian", "is_available": True},
-            {"name": "Cheese Toastie", "description": "", "price": 20.0, "category": "snacks", "emoji": "", "dietary": "vegetarian", "is_available": False},
-            {"name": "Rooibos Tea", "description": "", "price": 12.0, "category": "drinks", "emoji": "", "dietary": "vegetarian", "is_available": True},
-            {"name": "Coke 330ml", "description": "", "price": 14.0, "category": "drinks", "emoji": "", "dietary": "none", "is_available": True},
-            {"name": "Jungle Oats", "description": "", "price": 18.0, "category": "breakfast", "emoji": "", "dietary": "vegetarian", "is_available": True},
-            {"name": "Egg & Bacon Roll", "description": "", "price": 25.0, "category": "breakfast", "emoji": "", "dietary": "none", "is_available": True},
+            {"name": "Beef Bunny Chow", "description": "Durban-style curry in a quarter loaf", "price": 38.0, "category": "mains", "emoji": "🍞", "dietary": "none", "is_available": True},
+            {"name": "Grilled Chicken Wrap", "description": "Halal chicken with fresh salad", "price": 42.0, "category": "mains", "emoji": "🌯", "dietary": "halal", "is_available": True},
+            {"name": "Veggie Burger", "description": "Plant-based patty and chips", "price": 35.0, "category": "mains", "emoji": "🍔", "dietary": "vegetarian", "is_available": True},
+            {"name": "Pap & Chakalaka", "description": "Traditional maize pap with spicy relish", "price": 28.0, "category": "mains", "emoji": "🥘", "dietary": "vegetarian", "is_available": True},
+            {"name": "Boerewors Roll", "description": "South African sausage in a fresh roll", "price": 30.0, "category": "snacks", "emoji": "🌭", "dietary": "none", "is_available": True},
+            {"name": "Samoosa x2", "description": "Crispy pastry with spiced filling", "price": 15.0, "category": "snacks", "emoji": "🥟", "dietary": "halal", "is_available": True},
+            {"name": "Fruit Cup", "description": "Seasonal fresh fruit", "price": 22.0, "category": "snacks", "emoji": "🍇", "dietary": "vegetarian", "is_available": True},
+            {"name": "Cheese Toastie", "description": "Toasted cheese sandwich", "price": 20.0, "category": "snacks", "emoji": "🥪", "dietary": "vegetarian", "is_available": False},
+            {"name": "Rooibos Tea", "description": "South African red bush tea", "price": 12.0, "category": "drinks", "emoji": "🍵", "dietary": "vegetarian", "is_available": True},
+            {"name": "Coke 330ml", "description": "Chilled canned soft drink", "price": 14.0, "category": "drinks", "emoji": "🥤", "dietary": "none", "is_available": True},
+            {"name": "Jungle Oats", "description": "Warm oats with honey", "price": 18.0, "category": "breakfast", "emoji": "🥣", "dietary": "vegetarian", "is_available": True},
+            {"name": "Egg & Bacon Roll", "description": "Breakfast roll with egg and bacon", "price": 25.0, "category": "breakfast", "emoji": "🥓", "dietary": "none", "is_available": True},
         ]
         menu_items = []
         for item_data in menu_items_data:
@@ -87,12 +87,12 @@ def seed_data(app):
 
         print("Database seeded successfully!")
 
+
 if __name__ == '__main__':
+    load_dotenv()
     app = Flask(__name__)
-    load_dotenv()  
     DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///app.db")
     app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
     db.init_app(app)
     seed_data(app)
-    app.run(debug=True)
-

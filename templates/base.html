@@ -1,11 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}CampusEats{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}theme-light{% endblock %}">
 
+  <header class="nav">
+    <a class="nav-brand" href="{{ url_for('index') if current_role is not defined else '#' }}">
+      Campus<span>Eats</span>
+    </a>
+
+    <nav class="nav-links">
+      {% if current_role == 'student' %}
+        <a href="{{ url_for('student.menu') }}">Menu</a>
+      {% elif current_role == 'staff' %}
+        <a href="{{ url_for('staff.dashboard') }}">Kitchen</a>
+      {% elif current_role == 'admin' %}
+        <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('admin.menu') }}">Menu</a>
+        <a href="{{ url_for('admin.orders') }}">Orders</a>
+        <a href="{{ url_for('admin.students') }}">Students</a>
+      {% endif %}
+    </nav>
+
+    <div class="nav-user">
+      {% if current_user_name %}
+        <span class="pill pill-muted">{{ current_user_name }}</span>
+        <a class="btn btn-ghost" href="{{ url_for('auth.logout') }}">Log out</a>
+      {% else %}
+        <a class="btn btn-ghost" href="{{ url_for('auth.login') }}">Log in</a>
+        <a class="btn btn-primary" href="{{ url_for('auth.register') }}">Register</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

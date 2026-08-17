@@ -1,11 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Kitchen · CampusEats{% endblock %}
+{% block body_class %}theme-dark{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<header class="section-head">
+  <div>
+    <h1 class="h-display">Kitchen board</h1>
+    <p class="muted">Live orders · refreshes every 10 seconds</p>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="card stat"><span class="muted small">New</span><strong>{{ new_orders|length }}</strong></div>
+  <div class="card stat"><span class="muted small">Preparing</span><strong>{{ preparing_orders|length }}</strong></div>
+  <div class="card stat"><span class="muted small">Ready</span><strong>{{ ready_orders|length }}</strong></div>
+</div>
+
+<div class="kanban">
+  {% for column, orders, next_status, next_label in [
+      ('New', new_orders, 'preparing', 'Start preparing'),
+      ('Preparing', preparing_orders, 'ready', 'Mark ready'),
+      ('Ready', ready_orders, 'collected', 'Mark collected')
+  ] %}
+  <section class="kanban-col">
+    <h2 class="h-sub">{{ column }} <span class="pill pill-muted">{{ orders|length }}</span></h2>
+
+    <div class="kanban-cards">
+      {% for order in orders %}
+      <article class="card order-card">
+        <div class="order-head">
+          <span class="pickup-code-sm">{{ order.pickup_code }}</span>
+          <span class="muted small">{{ order.pickup_slot }}</span>
+        </div>
+
+        <ul class="line-items small">
+          {% for item in order['items'] %}
+            <li><span>{{ item.quantity }}× {{ item.menu_item_name }}</span></li>
+          {% endfor %}
+        </ul>
+
+        <form method="POST" action="{{ url_for('staff.update_status', order_id=order.id) }}">
+          <input type="hidden" name="new_status" value="{{ next_status }}">
+          <button type="submit" class="btn btn-primary btn-block btn-sm">{{ next_label }}</button>
+        </form>
+      </article>
+      {% else %}
+        <p class="muted small">Nothing here.</p>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="soldout">
+  <h2 class="h-sub">Availability</h2>
+  <div class="chip-row">
+    {% for item in menu_items %}
+    <form method="POST" action="{{ url_for('staff.toggle_menu_item', item_id=item.id) }}">
+      <button type="submit" class="chip {% if not item.is_available %}chip-off{% endif %}">
+        {{ item.name }}
+        <span class="chip-state">{{ 'Available' if item.is_available else 'Sold out' }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.CAMPUSEATS = { liveUrl: "{{ url_for('staff.live_orders') }}" };
+</script>
+<script src="{{ url_for('static', filename='js/staff.js') }}"></script>
+{% endblock %}

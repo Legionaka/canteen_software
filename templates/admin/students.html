@@ -1,11 +1,42 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Students · CampusEats{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<header class="section-head">
+  <div>
+    <h1 class="h-display">Students</h1>
+    <p class="muted">{{ students|length }} registered</p>
+  </div>
+  <input type="search" id="student-search" class="search" placeholder="Search name or number…">
+</header>
+
+<section class="card">
+  <table class="table" id="students-table">
+    <thead>
+      <tr><th>Name</th><th>Student no.</th><th>Email</th><th class="right">Orders</th><th class="right">Loyalty</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for student in students %}
+      <tr data-search="{{ (student.name ~ ' ' ~ (student.student_number or ''))|lower }}">
+        <td>{{ student.name|title }}</td>
+        <td class="mono">{{ student.student_number or '—' }}</td>
+        <td class="muted">{{ student.email }}</td>
+        <td class="right">{{ student.orders|length }}</td>
+        <td class="right">{{ student.loyalty_balance }} pts</td>
+        <td>
+          <span class="pill {{ 'pill-ready' if student.is_active else 'pill-soldout' }}">
+            {{ 'Active' if student.is_active else 'Inactive' }}
+          </span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No students registered.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

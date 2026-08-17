@@ -1,11 +1,98 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Menu · CampusEats{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="menu-layout">
+
+  <section class="menu-main">
+    <header class="section-head">
+      <div>
+        <h1 class="h-display">Today's menu</h1>
+        <p class="muted">Order ahead, skip the queue.</p>
+      </div>
+      <input type="search" id="menu-search" class="search" placeholder="Search food…">
+    </header>
+
+    <div class="tabs" id="category-tabs">
+      <button class="tab is-active" data-category="all">All</button>
+      <button class="tab" data-category="mains">Mains</button>
+      <button class="tab" data-category="snacks">Snacks</button>
+      <button class="tab" data-category="drinks">Drinks</button>
+      <button class="tab" data-category="breakfast">Breakfast</button>
+    </div>
+
+    <div class="card-grid" id="menu-grid">
+      {% for item in items %}
+      <article class="card item-card {% if not item.is_available %}is-unavailable{% endif %}"
+               data-category="{{ item.category }}"
+               data-name="{{ item.name|lower }}">
+        <div class="item-top">
+          <span class="item-emoji">{{ item.emoji or '🍽️' }}</span>
+          {% if item.dietary and item.dietary != 'none' %}
+            <span class="pill pill-diet">{{ item.dietary }}</span>
+          {% endif %}
+        </div>
+
+        <h3 class="item-name">{{ item.name }}</h3>
+        {% if item.description %}
+          <p class="muted small">{{ item.description }}</p>
+        {% endif %}
+
+        <div class="item-foot">
+          <span class="price">R{{ '%.2f'|format(item.price) }}</span>
+          {% if item.is_available %}
+            <button class="btn btn-primary btn-sm add-to-cart"
+                    data-id="{{ item.id }}"
+                    data-name="{{ item.name }}"
+                    data-price="{{ item.price }}">Add</button>
+          {% else %}
+            <span class="pill pill-soldout">Sold out</span>
+          {% endif %}
+        </div>
+      </article>
+      {% else %}
+        <p class="muted">No menu items yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="cart card" id="cart">
+    <h2 class="h-sub">Your order</h2>
+
+    <ul class="cart-list" id="cart-list">
+      <li class="muted small" id="cart-empty">Your cart is empty.</li>
+    </ul>
+
+    <div class="cart-totals">
+      <div class="row"><span>Subtotal</span><span id="cart-subtotal">R0.00</span></div>
+      <div class="row muted small"><span>Service fee</span><span>R2.00</span></div>
+      <div class="row row-total"><span>Total</span><span id="cart-total">R0.00</span></div>
+    </div>
+
+    <label class="field">
+      <span>Pickup slot</span>
+      <select id="pickup-slot">
+        <option value="11:30">11:30</option>
+        <option value="12:00" selected>12:00</option>
+        <option value="12:30">12:30</option>
+        <option value="13:00">13:00</option>
+        <option value="13:30">13:30</option>
+      </select>
+    </label>
+
+    <button class="btn btn-primary btn-block" id="place-order" disabled>Place order</button>
+    <p class="small error" id="cart-error" hidden></p>
+  </aside>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.CAMPUSEATS = {
+    orderUrl: "{{ url_for('student.create_order') }}",
+    trackUrlTemplate: "{{ url_for('student.track', order_id=0) }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='js/menu.js') }}"></script>
+{% endblock %}

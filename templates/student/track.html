@@ -1,11 +1,73 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Order #{{ order.id }} · CampusEats{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="track-wrap">
+
+  <section class="card code-card">
+    <p class="muted small">Show this code at the counter</p>
+    <p class="pickup-code">{{ order.pickup_code }}</p>
+    <p class="muted small">Pickup slot · {{ order.pickup_slot }}</p>
+  </section>
+
+  <section class="card">
+    <h2 class="h-sub">Progress</h2>
+    <ol class="progress" id="progress" data-status="{{ order.status }}">
+      <li class="step" data-step="new"><span class="dot"></span>Received</li>
+      <li class="step" data-step="preparing"><span class="dot"></span>Preparing</li>
+      <li class="step" data-step="ready"><span class="dot"></span>Ready</li>
+      <li class="step" data-step="collected"><span class="dot"></span>Collected</li>
+    </ol>
+    <p class="muted small">Status updates automatically.</p>
+  </section>
+
+  <section class="card">
+    <h2 class="h-sub">Items</h2>
+    <ul class="line-items">
+      {% for item in order['items'] %}
+      <li>
+        <span>{{ item.quantity }}× {{ item.menu_item_name }}</span>
+        <span>R{{ '%.2f'|format(item.unit_price * item.quantity) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <div class="cart-totals">
+      <div class="row"><span>Subtotal</span><span>R{{ '%.2f'|format(order.subtotal) }}</span></div>
+      <div class="row muted small"><span>Service fee</span><span>R{{ '%.2f'|format(order.service_fee) }}</span></div>
+      <div class="row row-total"><span>Total</span><span>R{{ '%.2f'|format(order.total) }}</span></div>
+    </div>
+  </section>
+
+  <a class="btn btn-ghost" href="{{ url_for('student.menu') }}">← Back to menu</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var statusUrl = "{{ url_for('student.order_status', order_id=order.id) }}";
+    var progress = document.getElementById('progress');
+    var order = ['new', 'preparing', 'ready', 'collected'];
+
+    function paint(status) {
+      progress.dataset.status = status;
+      var current = order.indexOf(status);
+      progress.querySelectorAll('.step').forEach(function (step) {
+        var i = order.indexOf(step.dataset.step);
+        step.classList.toggle('is-done', i < current);
+        step.classList.toggle('is-current', i === current);
+      });
+    }
+
+    paint(progress.dataset.status);
+
+    setInterval(function () {
+      fetch(statusUrl, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) { if (data && data.status) paint(data.status); })
+        .catch(function () { /* keep last known status */ });
+    }, 5000);
+  })();
+</script>
+{% endblock %}

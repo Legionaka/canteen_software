@@ -1,11 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Admin · CampusEats{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<header class="section-head">
+  <div>
+    <h1 class="h-display">Overview</h1>
+    <p class="muted">Today's canteen performance.</p>
+  </div>
+</header>
+
+<div class="stats-bar stats-4">
+  <div class="card stat"><span class="muted small">Orders today</span><strong>{{ stats.total_orders_today }}</strong></div>
+  <div class="card stat"><span class="muted small">Revenue today</span><strong>R{{ '%.2f'|format(stats.revenue_today) }}</strong></div>
+  <div class="card stat"><span class="muted small">Active students</span><strong>{{ stats.active_students }}</strong></div>
+  <div class="card stat"><span class="muted small">Avg wait</span><strong>{{ stats.avg_wait_minutes }} min</strong></div>
+</div>
+
+<div class="two-col">
+  <section class="card">
+    <h2 class="h-sub">Orders by hour</h2>
+    <canvas id="hourly-chart" height="220"></canvas>
+  </section>
+
+  <section class="card">
+    <h2 class="h-sub">Top items</h2>
+    <ul class="bar-list" id="top-items">
+      <li class="muted small">Loading…</li>
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2 class="h-sub">Recent orders</h2>
+  <table class="table">
+    <thead>
+      <tr><th>Code</th><th>Student</th><th>Slot</th><th>Status</th><th class="right">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for order in recent_orders %}
+      <tr>
+        <td class="mono">{{ order.pickup_code }}</td>
+        <td>{{ order.user.name if order.user else '—' }}</td>
+        <td>{{ order.pickup_slot }}</td>
+        <td><span class="pill pill-{{ order.status }}">{{ order.status }}</span></td>
+        <td class="right">R{{ '%.2f'|format(order.total) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No orders yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  window.CAMPUSEATS = { statsUrl: "{{ url_for('admin.stats') }}" };
+</script>
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

@@ -1,11 +1,49 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Orders · CampusEats{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<header class="section-head">
+  <div>
+    <h1 class="h-display">All orders</h1>
+    <p class="muted">{{ orders|length }} total</p>
+  </div>
+  <input type="date" id="order-date-filter" class="search">
+</header>
+
+<div class="tabs" id="order-status-tabs">
+  <button class="tab is-active" data-status="all">All</button>
+  <button class="tab" data-status="new">New</button>
+  <button class="tab" data-status="preparing">Preparing</button>
+  <button class="tab" data-status="ready">Ready</button>
+  <button class="tab" data-status="collected">Collected</button>
+</div>
+
+<section class="card">
+  <table class="table" id="orders-table">
+    <thead>
+      <tr><th>Code</th><th>Student</th><th>Items</th><th>Slot</th><th>Placed</th><th>Status</th><th class="right">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for order in orders %}
+      <tr data-status="{{ order.status }}" data-date="{{ order.created_at.strftime('%Y-%m-%d') }}">
+        <td class="mono">{{ order.pickup_code }}</td>
+        <td>{{ order.user.name if order.user else '—' }}</td>
+        <td class="muted small">
+          {% for item in order.items %}{{ item.quantity }}× {{ item.menu_item.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </td>
+        <td>{{ order.pickup_slot }}</td>
+        <td class="muted small">{{ order.created_at.strftime('%d %b %H:%M') }}</td>
+        <td><span class="pill pill-{{ order.status }}">{{ order.status }}</span></td>
+        <td class="right">R{{ '%.2f'|format(order.total) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No orders yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}
